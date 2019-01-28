@@ -9,8 +9,8 @@ namespace SimpleMessaging
         Publisher,
         Subscriber
     }
-    
-    
+
+
     public class PublishSubscribeChannel : IDisposable
     {
         private readonly ChannelType _channelType;
@@ -44,15 +44,22 @@ namespace SimpleMessaging
             factory.AutomaticRecoveryEnabled = true;
             _connection = factory.CreateConnection();
             _channel = _connection.CreateModel();
-            
+
             // TODO: On the channel declare a non-durable fanout exchange 
+            _channel.ExchangeDeclare(ExchangeName, ExchangeType.Fanout, false, false, null);
             if (channelType == ChannelType.Subscriber)
             {
                 //make the queue exclusive and autoDelete as it exists only for this subscriber; a publisher does not 
                 //create as we would not use the queue so created for that client, hence the flag in the constructor
+
                 //TODO: declare a queue but don't pass a queuename
+                var queue = _channel.QueueDeclare("", false, true, true, null);
+
                 //TODO: Grab the randonly genereated queue name from the resut of the queue creation operation
+                _queueName = queue.QueueName;
+
                 //TODO: Bind the queue name to the exchange with the ALL (empty string above) routing key
+                _channel.QueueBind(_queueName, ExchangeName, ALL);
             }
         }
 
@@ -65,9 +72,11 @@ namespace SimpleMessaging
         {
             if (_channelType != ChannelType.Publisher)
                 throw new InvalidOperationException("You cannot send from a consumer");
-            
+
             var body = Encoding.UTF8.GetBytes(message);
+
             //TODO: Publish to the exchange, using the ALL routingkey
+            _channel.BasicPublish(ExchangeName, ALL, false, null, body);
         }
 
         /// <summary>
@@ -82,13 +91,13 @@ namespace SimpleMessaging
         {
             if (_channelType != ChannelType.Subscriber)
                 throw new InvalidOperationException("You cannot receive on a publisher");
-            
+
             var result = _channel.BasicGet(_queueName, autoAck: true);
             if (result != null)
                 return Encoding.UTF8.GetString(result.Body);
             else
                 return null;
-        }   
+        }
 
         public void Dispose()
         {
