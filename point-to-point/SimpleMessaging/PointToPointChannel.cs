@@ -33,15 +33,20 @@ namespace SimpleMessaging
             factory.AutomaticRecoveryEnabled = true;
             _connection = factory.CreateConnection();
             _channel = _connection.CreateModel();
-            
+
             //Because we are point to point, we are just going to use queueName for the routing key
             _routingKey = queueName;
             _queueName = queueName;
-            
+
             //TODO: declare a non-durable direct exchange via the channel
+            _channel.ExchangeDeclare(ExchangeName, ExchangeType.Direct, false, false, null);
+
             //TODO: declare a non-durable queue. non-exc;usive, that does not auto-delete. Use _queuename
+            _channel.QueueDeclare(_queueName, false, false, false, null);
+
             //TODO: bind _queuename to _routingKey on the exchange
-       }
+            _channel.QueueBind(_queueName, ExchangeName, _routingKey, null);
+        }
 
         /// <summary>
         /// Send a message over the channel
@@ -53,6 +58,7 @@ namespace SimpleMessaging
         {
             var body = Encoding.UTF8.GetBytes(message);
             //TODO: Publish on the exchange using the routing key
+            _channel.BasicPublish(ExchangeName, _routingKey, null, body);
         }
 
         /// <summary>
@@ -64,12 +70,17 @@ namespace SimpleMessaging
         public string Receive()
         {
             //TODO: Use basic get to read a message, don't auto acknowledge the message
-            //var result = 
-            //if (result != null)
-            //    return Encoding.UTF8.GetString(result.Body);
-            //else
+            var result = _channel.BasicGet(_queueName, false);
+
+            if (result != null)
+            {
+                _channel.BasicAck(result.DeliveryTag, false);
+                return Encoding.UTF8.GetString(result.Body);
+            }
+            else
                 return null;
-        }   
+
+        }
 
         public void Dispose()
         {
