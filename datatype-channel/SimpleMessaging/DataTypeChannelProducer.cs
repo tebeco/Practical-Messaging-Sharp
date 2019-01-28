@@ -55,6 +55,8 @@ namespace SimpleMessaging
         public void Send(T message)
         {
             //TODO: Serialize the message Tip, convert to UTF8
+            var serializedMsg = _messageSerializer(message);
+            var body = Encoding.UTF8.GetBytes(serializedMsg);
             _channel.BasicPublish(exchange: ExchangeName, routingKey: _routingKey, basicProperties: null, body: body);
         }
 
