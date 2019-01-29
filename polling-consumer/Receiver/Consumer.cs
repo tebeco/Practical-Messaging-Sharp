@@ -26,6 +26,7 @@ namespace Sender
                 Console.WriteLine(" Press [enter] to exit.");
                 //has its own thread and will continue until signalled
                 var task = consumer.Run(tokenSource.Token);
+                
                 while (true)
                 {
                     //loop until we get a keyboard interrupt
@@ -56,7 +57,6 @@ namespace Sender
             {
                 tokenSource.Dispose();
             }
-
         }
     }
 }
