@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 
 namespace SimpleMessaging
 {
-    public class PollingConsumer<T, TResponse> where T: IAmAMessage where TResponse: IAmAResponse
+    public class PollingConsumer<T, TResponse> where T : IAmAMessage where TResponse : IAmAResponse
     {
         private readonly IAmAHandler<T, TResponse> _messageHandler;
         private readonly Func<string, T> _messageDeserializer;
@@ -13,9 +13,9 @@ namespace SimpleMessaging
         private readonly string _hostName;
 
         public PollingConsumer(
-            IAmAHandler<T, TResponse> messageHandler, 
-            Func<string, T> messageDeserializer, 
-            Func<TResponse, string> messageSerializer, 
+            IAmAHandler<T, TResponse> messageHandler,
+            Func<string, T> messageDeserializer,
+            Func<TResponse, string> messageSerializer,
             string hostName = "localhost")
         {
             _messageHandler = messageHandler;
@@ -23,7 +23,7 @@ namespace SimpleMessaging
             _messageSerializer = messageSerializer;
             _hostName = hostName;
         }
-        
+
         public Task Run(CancellationToken ct)
         {
             var task = Task.Factory.StartNew(() =>
@@ -40,8 +40,21 @@ namespace SimpleMessaging
                              *     create a RequestReplyChannelResponder
                              *     respond to the request, with the response from the handler
                              */
-                            
-                            
+
+                            var request = channel.Receive();
+                            if (request != null)
+                            {
+                                var response = _messageHandler.Handle(request);
+                                using (var responder = new RequestReplyChannelResponder<TResponse>(_messageSerializer, _hostName))
+                                {
+                                    responder.Respond(request.ReplyTo, response);
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine("Did not receive message");
+                            }
+
                             Task.Delay(1000, ct).Wait(ct); //yield
                             ct.ThrowIfCancellationRequested();
                         }

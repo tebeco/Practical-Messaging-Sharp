@@ -6,7 +6,7 @@ using RabbitMQ.Client;
 
 namespace SimpleMessaging
 {
-    public class RequestReplyChannelConsumer<T> : IDisposable where T: IAmAMessage
+    public class RequestReplyChannelConsumer<T> : IDisposable where T : IAmAMessage
     {
         private readonly Func<string, T> _messageDeserializer;
         private readonly string _queueName;
@@ -42,17 +42,17 @@ namespace SimpleMessaging
             factory.AutomaticRecoveryEnabled = true;
             _connection = factory.CreateConnection();
             _channel = _connection.CreateModel();
-            
-           
-             /* We choose to base the key off the type name, because we want tp publish to folks interested in this type
-              We name the queue after that routing key as we are point-to-point and only expect one queue to receive
-             this type of message */
+
+
+            /* We choose to base the key off the type name, because we want tp publish to folks interested in this type
+             We name the queue after that routing key as we are point-to-point and only expect one queue to receive
+            this type of message */
             var routingKey = "Request-Reply." + typeof(T).FullName;
             _queueName = routingKey;
 
             var invalidRoutingKey = "invalid." + routingKey;
             var invalidMessageQueueName = invalidRoutingKey;
-            
+
             //Make the exhange durable, so that we can keep our messages/queues between restarts
             _channel.ExchangeDeclare(ExchangeName, ExchangeType.Direct, durable: true);
             var arguments = new Dictionary<string, object>()
@@ -60,20 +60,20 @@ namespace SimpleMessaging
                 {"x-dead-letter-exchange", InvalidMessageExchangeName},
                 {"x-dead-letter-routing-key", invalidRoutingKey}
             };
-            
+
             //if we are going to have persistent messages, it mostly makes sense to have a durable queue, to survive
             //restarts, or client failures
             _channel.QueueDeclare(queue: _queueName, durable: true, exclusive: false, autoDelete: false, arguments: arguments);
             _channel.QueueBind(queue: _queueName, exchange: ExchangeName, routingKey: routingKey);
-            
+
             //declare a queue for invalid messages off an invalid message exchange
             //messages that we nack without requeue will go here
             _channel.ExchangeDeclare(InvalidMessageExchangeName, ExchangeType.Direct, durable: true);
             _channel.QueueDeclare(queue: invalidMessageQueueName, durable: true, exclusive: false, autoDelete: false);
-            _channel.QueueBind(queue:invalidMessageQueueName, exchange:InvalidMessageExchangeName, routingKey:invalidRoutingKey);
+            _channel.QueueBind(queue: invalidMessageQueueName, exchange: InvalidMessageExchangeName, routingKey: invalidRoutingKey);
 
         }
-        
+
 
         /// <summary>
         /// Receive a message from the queue
@@ -94,19 +94,21 @@ namespace SimpleMessaging
                      * set the reply to property of the message, from the result properties
                      * return the message
                      */
-                    
-                   //T message =
-                   return message;
+                    var message = _messageDeserializer(Encoding.UTF8.GetString(result.Body));
+                    _channel.BasicAck(result.DeliveryTag, false);
+                    message.ReplyTo = result.BasicProperties.ReplyTo;
+
+                    return message;
                 }
                 catch (JsonSerializationException e)
                 {
                     Console.WriteLine($"Error processing the incoming message {e}");
                     //put format errors onto the invalid message queue
-                    _channel.BasicNack(deliveryTag:result.DeliveryTag, multiple: false, requeue:false);
+                    _channel.BasicNack(deliveryTag: result.DeliveryTag, multiple: false, requeue: false);
                 }
-            
-            return default(T) ;
-        }   
+
+            return default(T);
+        }
 
         public void Dispose()
         {

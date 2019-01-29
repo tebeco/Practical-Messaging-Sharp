@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 
 namespace SimpleMessaging
 {
-    public class RequestReplyChannelResponder<TResponse> : IDisposable where TResponse: IAmAResponse
+    public class RequestReplyChannelResponder<TResponse> : IDisposable where TResponse : IAmAResponse
     {
         private readonly Func<TResponse, string> _messageSerializer;
         private readonly IConnection _connection;
@@ -25,17 +25,17 @@ namespace SimpleMessaging
             };
             _connection = factory.CreateConnection();
             _channel = _connection.CreateModel();
- 
+
         }
 
         public void Respond(string replyQueuename, TResponse response)
         {
             try
             {
-                Console.WriteLine("Responding on queue {0} to message with correlation id {1}", 
+                Console.WriteLine("Responding on queue {0} to message with correlation id {1}",
                     replyQueuename, response.CorrelationId.ToString());
-                
-                
+
+
                 /*
                  * TODO: crate basic properites via the channel
                  * Set the correlation id
@@ -44,9 +44,14 @@ namespace SimpleMessaging
                  * Publish th othe default exchange hint: "" where routing key = queue name
                  * 
                  */
-               
+
+                var props = _channel.CreateBasicProperties();
+                props.CorrelationId = response.CorrelationId.ToString();
+                var body = Encoding.UTF8.GetBytes(_messageSerializer(response));
+                _channel.BasicPublish("", replyQueuename, false, props, body);
+
                 Console.WriteLine("Responded on queue {0} at {1}", replyQueuename, DateTime.UtcNow);
-     
+
             }
             catch (Exception e)
             {
