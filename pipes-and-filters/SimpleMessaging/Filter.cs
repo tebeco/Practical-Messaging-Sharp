@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace SimpleMessaging
 {
-    public class Filter<TIn, TOut> where TIn: IAmAMessage where TOut: IAmAMessage
+    public class Filter<TIn, TOut> where TIn : IAmAMessage where TOut : IAmAMessage
     {
         private readonly IAmAnOperation<TIn, TOut> _operation;
         private readonly Func<string, TIn> _messageDeserializer;
@@ -18,7 +18,7 @@ namespace SimpleMessaging
             _messasgeSerializer = messasgeSerializer;
             _hostName = hostName;
         }
-       
+
         /// <summary>
         /// In essence a filter step takes an input channel, reads the message, performs an operation on it, and then sends it to an output channel
         /// It is worth noting that the filter should read one message, process, then re-post to be considered pipes-and-filters over
@@ -36,10 +36,27 @@ namespace SimpleMessaging
         /// <returns></returns>
         public Task Run(CancellationToken ct)
         {
-            var task = Task.Factory.StartNew(() =>
+            var task = Task.Factory.StartNew(async () =>
                 {
-                    ct.ThrowIfCancellationRequested();
-                    
+                    using (var consumer = new DataTypeChannelConsumer<TIn>(_messageDeserializer, _hostName))
+                    {
+                        while (!ct.IsCancellationRequested)
+                        {
+                            var incomingMessage = consumer.Receive();
+                            if (incomingMessage != null)
+                            {
+                                var enrichedMessage = _operation.Execute(incomingMessage);
+                                using (var producer = new DataTypeChannelProducer<TOut>(_messasgeSerializer, _hostName))
+                                {
+                                    producer.Send(enrichedMessage);
+                                }
+                            }
+                            else
+                            {
+                                await Task.Delay(1000, ct);
+                            }
+                        }
+                    }
                     /*TODO
                      *
                      * Create an in pipe from a DataTypeChannelConsumer
@@ -55,7 +72,7 @@ namespace SimpleMessaging
                      *     check for a cancelled token
                      * displose of the consumer
                      */
-               }, ct
+                }, ct
             );
             return task;
         }
