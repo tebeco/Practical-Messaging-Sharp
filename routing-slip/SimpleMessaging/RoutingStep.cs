@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace SimpleMessaging
 {
-    public class RoutingStep<T> where T: IAmARoutingSlip
+    public class RoutingStep<T> where T : IAmARoutingSlip
     {
         private readonly string _thisRoutingKey;
         private readonly IAmAnOperation<T> _operation;
@@ -14,10 +14,10 @@ namespace SimpleMessaging
         private readonly string _hostName;
 
         public RoutingStep(
-            string thisRoutingKey, 
-            IAmAnOperation<T> operation, 
-            Func<string, T> messageDeserializer, 
-            Func<T, string> messasgeSerializer, 
+            string thisRoutingKey,
+            IAmAnOperation<T> operation,
+            Func<string, T> messageDeserializer,
+            Func<T, string> messasgeSerializer,
             string hostName = "localhost")
         {
             _thisRoutingKey = thisRoutingKey;
@@ -26,7 +26,7 @@ namespace SimpleMessaging
             _messasgeSerializer = messasgeSerializer;
             _hostName = hostName;
         }
-       
+
         /// <summary>
         /// A routing slip based consumer has to be aware of the slip, because it needs to know how to forward the message
         /// on to the next step. Unlike a filter that has a pre-defined destination on the filter, the routing slip carries
@@ -44,9 +44,9 @@ namespace SimpleMessaging
             var task = Task.Factory.StartNew(() =>
                 {
                     ct.ThrowIfCancellationRequested();
-                    
-                   
-                    
+
+
+
                     using (var inPipe = new DataTypeChannelConsumer<T>(_thisRoutingKey, _messageDeserializer, _hostName))
                     {
                         while (true)
@@ -68,6 +68,25 @@ namespace SimpleMessaging
                              * 
                              * 
                              */
+                            var message = inPipe.Receive();
+                            if (message != null)
+                            {
+                                var outMessage = _operation.Execute(message);
+                                message.Steps[message.CurrentStep].Completed = true;
+                                var nextStepId = message.CurrentStep + 1;
+
+                                if (message.Steps.ContainsKey(nextStepId))
+                                {
+                                    var nextStep = message.Steps[nextStepId];
+                                    var nextRoutingKey = nextStep.RoutingKey;
+
+                                    outMessage.CurrentStep = nextStepId;
+                                    using (var producer = new DataTypeChannelProducer<T>(nextRoutingKey, _messasgeSerializer, _hostName))
+                                    {
+                                        producer.Send(outMessage);
+                                    }
+                                }
+                            }
                             else
                             {
                                 Task.Delay(1000, ct).Wait(ct); //yield
